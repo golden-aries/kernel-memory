@@ -9,6 +9,7 @@
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
         <IsPackable>false</IsPackable>
         <NoWarn>$(NoWarn);CA2007;CA1724;CA2254;CA1031;CS1591;CA1861;CA1303;SKEXP0001;</NoWarn>
+        <UserSecretsId>Telexy.Semantic_Search_50128074-f045-4b77-9b58-0f3eb1a776d4</UserSecretsId>
     </PropertyGroup>
 
     <ItemGroup>
