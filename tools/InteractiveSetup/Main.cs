@@ -35,6 +35,7 @@ public static class Main
             // Document Storage
             DocumentStorageTypeSetup(ctx);
             AzureBlobs.Setup(ctx);
+            AWSS3.Setup(ctx);
             MongoDbAtlasDocumentStorage.Setup(ctx);
             SimpleFileStorage.Setup(ctx);
 
@@ -179,7 +180,7 @@ public static class Main
                         x.Retrieval.EmbeddingGeneratorType = "AzureOpenAIEmbedding";
                         x.DataIngestion.EmbeddingGeneratorTypes = ctx.CfgEmbeddingGenerationEnabled.Value
                             ? new List<string> { x.Retrieval.EmbeddingGeneratorType }
-                            : new List<string> { };
+                            : new List<string>();
                     });
                     ctx.CfgAzureOpenAIEmbedding.Value = true;
                 }),
@@ -199,7 +200,7 @@ public static class Main
                     AppSettings.Change(x =>
                     {
                         x.Retrieval.EmbeddingGeneratorType = "";
-                        x.DataIngestion.EmbeddingGeneratorTypes = new List<string> { };
+                        x.DataIngestion.EmbeddingGeneratorTypes = new List<string>();
                     });
                 }),
                 new("-exit-", false, SetupUI.Exit),
@@ -319,6 +320,13 @@ public static class Main
                         AppSettings.Change(x => { x.DocumentStorageType = "AzureBlobs"; });
                         ctx.CfgAzureBlobs.Value = true;
                     }),
+                new("AWS S3",
+                    config.DocumentStorageType == "AWSS3",
+                    () =>
+                    {
+                        AppSettings.Change(x => { x.DocumentStorageType = "AWSS3"; });
+                        ctx.CfgAWSS3.Value = true;
+                    }),
                 new("MongoDB Atlas",
                     config.DocumentStorageType == "MongoDbAtlas",
                     () =>
@@ -420,7 +428,7 @@ public static class Main
                         AppSettings.Change(x =>
                         {
                             x.Retrieval.MemoryDbType = "";
-                            x.DataIngestion.MemoryDbTypes = new List<string> { };
+                            x.DataIngestion.MemoryDbTypes = new List<string>();
                         });
                     }),
                 new("-exit-", false, SetupUI.Exit),

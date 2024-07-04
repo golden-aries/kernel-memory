@@ -1,22 +1,19 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
-// ReSharper disable RedundantUsingDirective
-
-#pragma warning disable IDE0005 // temp
-
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
-using Microsoft.KernelMemory.Service.AspNetCore.Models;
-using System.IO;
-using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.KernelMemory.Context;
 using Microsoft.KernelMemory.DocumentStorage;
+using Microsoft.KernelMemory.Service.AspNetCore.Models;
 
 namespace Microsoft.KernelMemory.Service.AspNetCore;
 
@@ -49,6 +46,7 @@ public static class WebAPIEndpoints
                 HttpRequest request,
                 IKernelMemory service,
                 ILogger<KernelMemoryWebAPI> log,
+                IContextProvider contextProvider,
                 CancellationToken cancellationToken) =>
             {
                 log.LogTrace("New upload HTTP request, content length {0}", request.ContentLength);
@@ -57,6 +55,9 @@ public static class WebAPIEndpoints
                 (HttpDocumentUploadRequest input, bool isValid, string errMsg)
                     = await HttpDocumentUploadRequest.BindHttpRequestAsync(request, cancellationToken)
                         .ConfigureAwait(false);
+
+                // Allow internal classes to access custom arguments via IContextProvider
+                contextProvider.InitContextArgs(input.ContextArguments);
 
                 log.LogTrace("Index '{0}'", input.Index);
 
@@ -69,7 +70,8 @@ public static class WebAPIEndpoints
                 try
                 {
                     // UploadRequest => Document
-                    var documentId = await service.ImportDocumentAsync(input.ToDocumentUploadRequest(), cancellationToken)
+                    var documentId = await service
+                        .ImportDocumentAsync(input.ToDocumentUploadRequest(), contextProvider.GetContext(), cancellationToken)
                         .ConfigureAwait(false);
 
                     log.LogTrace("Doc Id '{1}'", documentId);
@@ -138,7 +140,7 @@ public static class WebAPIEndpoints
         // Delete index endpoint
         var route = group.MapDelete(Constants.HttpIndexesEndpoint,
                 async Task<IResult> (
-                    [FromQuery(Name = Constants.WebServiceIndexField)]
+                    [FromQuery(Name = Constants.WebService.IndexField)]
                     string? index,
                     IKernelMemory service,
                     ILogger<KernelMemoryWebAPI> log,
@@ -170,9 +172,9 @@ public static class WebAPIEndpoints
         // Delete document endpoint
         var route = group.MapDelete(Constants.HttpDocumentsEndpoint,
                 async Task<IResult> (
-                    [FromQuery(Name = Constants.WebServiceIndexField)]
+                    [FromQuery(Name = Constants.WebService.IndexField)]
                     string? index,
-                    [FromQuery(Name = Constants.WebServiceDocumentIdField)]
+                    [FromQuery(Name = Constants.WebService.DocumentIdField)]
                     string documentId,
                     IKernelMemory service,
                     ILogger<KernelMemoryWebAPI> log,
@@ -209,14 +211,19 @@ public static class WebAPIEndpoints
                     MemoryQuery query,
                     IKernelMemory service,
                     ILogger<KernelMemoryWebAPI> log,
+                    IContextProvider contextProvider,
                     CancellationToken cancellationToken) =>
                 {
+                    // Allow internal classes to access custom arguments via IContextProvider
+                    contextProvider.InitContextArgs(query.ContextArguments);
+
                     log.LogTrace("New search request, index '{0}', minRelevance {1}", query.Index, query.MinRelevance);
                     MemoryAnswer answer = await service.AskAsync(
                             question: query.Question,
                             index: query.Index,
                             filters: query.Filters,
                             minRelevance: query.MinRelevance,
+                            context: contextProvider.GetContext(),
                             cancellationToken: cancellationToken)
                         .ConfigureAwait(false);
                     return Results.Ok(answer);
@@ -239,8 +246,12 @@ public static class WebAPIEndpoints
                     SearchQuery query,
                     IKernelMemory service,
                     ILogger<KernelMemoryWebAPI> log,
+                    IContextProvider contextProvider,
                     CancellationToken cancellationToken) =>
                 {
+                    // Allow internal classes to access custom arguments via IContextProvider
+                    contextProvider.InitContextArgs(query.ContextArguments);
+
                     log.LogTrace("New search HTTP request, index '{0}', minRelevance {1}", query.Index, query.MinRelevance);
                     SearchResult answer = await service.SearchAsync(
                             query: query.Query,
@@ -248,6 +259,7 @@ public static class WebAPIEndpoints
                             filters: query.Filters,
                             minRelevance: query.MinRelevance,
                             limit: query.Limit,
+                            context: contextProvider.GetContext(),
                             cancellationToken: cancellationToken)
                         .ConfigureAwait(false);
                     return Results.Ok(answer);
@@ -267,9 +279,9 @@ public static class WebAPIEndpoints
         // Document status endpoint
         var route = group.MapGet(Constants.HttpUploadStatusEndpoint,
                 async Task<IResult> (
-                    [FromQuery(Name = Constants.WebServiceIndexField)]
+                    [FromQuery(Name = Constants.WebService.IndexField)]
                     string? index,
-                    [FromQuery(Name = Constants.WebServiceDocumentIdField)]
+                    [FromQuery(Name = Constants.WebService.DocumentIdField)]
                     string documentId,
                     IKernelMemory memoryClient,
                     ILogger<KernelMemoryWebAPI> log,
@@ -278,7 +290,7 @@ public static class WebAPIEndpoints
                     log.LogTrace("New document status HTTP request");
                     if (string.IsNullOrEmpty(documentId))
                     {
-                        return Results.Problem(detail: $"'{Constants.WebServiceDocumentIdField}' query parameter is missing or has no value", statusCode: 400);
+                        return Results.Problem(detail: $"'{Constants.WebService.DocumentIdField}' query parameter is missing or has no value", statusCode: 400);
                     }
 
                     DataPipelineStatus? pipeline = await memoryClient.GetDocumentStatusAsync(documentId: documentId, index: index, cancellationToken)
@@ -310,11 +322,11 @@ public static class WebAPIEndpoints
 
         // File download endpoint
         var route = group.MapGet(Constants.HttpDownloadEndpoint, async Task<IResult> (
-                [FromQuery(Name = Constants.WebServiceIndexField)]
+                [FromQuery(Name = Constants.WebService.IndexField)]
                 string? index,
-                [FromQuery(Name = Constants.WebServiceDocumentIdField)]
+                [FromQuery(Name = Constants.WebService.DocumentIdField)]
                 string documentId,
-                [FromQuery(Name = Constants.WebServiceFilenameField)]
+                [FromQuery(Name = Constants.WebService.FilenameField)]
                 string filename,
                 HttpContext httpContext,
                 IKernelMemory service,
@@ -385,11 +397,8 @@ public static class WebAPIEndpoints
         if (authFilter != null) { route.AddEndpointFilter(authFilter); }
     }
 
-    // Class used to tag log entries and allow log filtering
-    // ReSharper disable once ClassNeverInstantiated.Local
 #pragma warning disable CA1812 // used by logger, can't be static
-    private sealed class KernelMemoryWebAPI
-    {
-    }
+    // Class used to tag log entries and allow log filtering
+    private sealed class KernelMemoryWebAPI;
 #pragma warning restore CA1812
 }

@@ -1,5 +1,4 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
-// ReSharper disable InconsistentNaming
 
 using Microsoft.KernelMemory;
 using Microsoft.KernelMemory.Diagnostics;
@@ -37,11 +36,11 @@ public class MyHandler : IPipelineStepHandler
     public MyHandler(
         string stepName,
         IPipelineOrchestrator orchestrator,
-        ILogger<MyHandler>? log = null)
+        ILoggerFactory? loggerFactory = null)
     {
         this.StepName = stepName;
         this._orchestrator = orchestrator;
-        this._log = log ?? DefaultLogger<MyHandler>.Instance;
+        this._log = (loggerFactory ?? DefaultLogger.Factory).CreateLogger<MyHandler>();
     }
 
     /// <inheritdoc />
